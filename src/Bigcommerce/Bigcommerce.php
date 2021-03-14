@@ -174,9 +174,9 @@ class Bigcommerce
 
     public function addHeader($key, $value)
     {
-        $this->bigcommerce->addHeader($key, $value);
-
-        return $this;
+        return tap($this, function ($client) use ($key, $value) {
+            $this->bigcommerce->addHeader($key, $value);
+        });
     }
 
     public function removeHeader($header)
