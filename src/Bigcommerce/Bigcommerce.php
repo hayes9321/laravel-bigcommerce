@@ -2,11 +2,11 @@
 
 namespace Oseintow\Bigcommerce;
 
-use Config;
+use Illuminate\Support\Facades\Config;
 use Bigcommerce\Api\Connection as BigcommerceClient;
 use Bigcommerce\Api\Client as BigcommerceCollectionResource;
 use Oseintow\Bigcommerce\Exceptions\BigcommerceApiException;
-
+use Exception;
 
 class Bigcommerce
 {
@@ -26,6 +26,8 @@ class Bigcommerce
     public function __construct()
     {
         $this->setConnection(Config::get('bigcommerce.default'));
+        $this->setStoreHash(Config::get('bigcommerce.store-hash'));
+        $this->setAccessToken(Config::get('bigcommerce.client_secret'));
     }
 
     private function setConnection($connection)
@@ -41,9 +43,9 @@ class Bigcommerce
 
     public function verifyPeer($option = false)
     {
-        $this->bigcommerce->verifyPeer($option);
-
-        return $this;
+        return tap($this, function ($client) use ($option) {
+            $this->bigcommerce->verifyPeer($option);
+        });
     }
 
     private function oAuth()
@@ -69,17 +71,17 @@ class Bigcommerce
      */
     public function setStoreHash($storeHash)
     {
-        $storeHash = explode("/", $storeHash);
-        $this->storeHash = $storeHash[count($storeHash) - 1];
-
-        return $this;
+        return tap($this, function ($client) use ($storeHash) {
+            $storeHash = explode("/", $storeHash);
+            $this->storeHash = $storeHash[count($storeHash) - 1];
+        });
     }
 
     public function setApiVersion($version)
     {
-        $this->version = $version;
-
-        return $this;
+        return tap($this, function ($client) use ($version) {
+            $this->version = $version;
+        });
     }
 
     public function getAccessToken($code, $scope, $context)
@@ -101,10 +103,10 @@ class Bigcommerce
 
     public function setAccessToken($accessToken)
     {
-        $this->accessToken = $accessToken;
-        $this->bigcommerce->addHeader("X-Auth-Token", $accessToken);
-
-        return $this;
+        return tap($this, function ($client) use ($accessToken) {
+            $this->accessToken = $accessToken;
+            $this->bigcommerce->addHeader("X-Auth-Token", $accessToken);
+        });
     }
 
     /*
@@ -136,7 +138,7 @@ class Bigcommerce
             return $this->version== "v2" ?
                 collect($data) : collect($data)->map(function($value) { return collect($value); });
 
-        }catch(Exception $e){
+        } catch(Exception $e){
             throw new BigcommerceApiException($e->getMessage(), $e->getCode());
         }
     }
@@ -144,7 +146,7 @@ class Bigcommerce
     public function makeBigcomerceCollectionRequest($method, $args)
     {
         try {
-            if($this->connection == "oAuth"){
+            if ($this->connection == "oAuth"){
                 BigcommerceCollectionResource::configure([
                     'client_id'  => $this->clientId,
                     'auth_token' => $this->accessToken,
@@ -152,13 +154,13 @@ class Bigcommerce
                 ]);
             }
 
-            if($this->version == "v3")
+            if ($this->version == "v3")
                 throw new BigcommerceApiException("Bigcommerce collection does not support api version 3", 403);
 
             $data = call_user_func_array([BigcommerceCollectionResource::class, $method], $args);
 
             return $data;
-        }catch(Exception $e){
+        } catch(Exception $e){
             throw new BigcommerceApiException($e->getMessage(), $e->getCode());
         }
     }
@@ -197,4 +199,34 @@ class Bigcommerce
         return $this->bigcommerce->getheader($header);
     }
 
+    public function paginateRequest($uri, $version, $config = [])
+    {
+        $pageLimit = $config['pages'] ?? 1;
+
+        $currentPage = 1;
+
+        $results = collect();
+
+        do {
+            $collection = $this->setApiVersion($version)
+                ->get($uri, [
+                    "limit"=> $config['limit'] ?? 50,
+                    "page" => $currentPage
+                ]);
+
+            // Exit loop if there are no results.
+            if ($collection['data']->isEmpty()) {
+                break;
+            }
+
+            // Add the item to the results collection
+            $collection['data']->each(function ($item) use ($results) {
+                $results->push($item);
+            });
+
+            $currentPage++;
+        } while($currentPage < $pageLimit);
+
+        return $results;
+    }
 }
