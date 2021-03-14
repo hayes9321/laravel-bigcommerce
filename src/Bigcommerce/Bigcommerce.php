@@ -2,11 +2,9 @@
 
 namespace Oseintow\Bigcommerce;
 
-use Illuminate\Support\Facades\Config;
 use Bigcommerce\Api\Connection as BigcommerceClient;
 use Bigcommerce\Api\Client as BigcommerceCollectionResource;
 use Oseintow\Bigcommerce\Exceptions\BigcommerceApiException;
-use Exception;
 
 class Bigcommerce
 {
@@ -199,7 +197,7 @@ class Bigcommerce
         return $this->bigcommerce->getheader($header);
     }
 
-    public function paginateRequest($uri, $version, $config = [])
+    public function paginateRequest($uri, $config = [])
     {
         $pageLimit = $config['pages'] ?? 1;
 
@@ -208,24 +206,44 @@ class Bigcommerce
         $results = collect();
 
         do {
-            $collection = $this->setApiVersion($version)
+            $collection = $this->setApiVersion($this->version)
                 ->get($uri, [
                     "limit"=> $config['limit'] ?? 50,
                     "page" => $currentPage
                 ]);
 
-            // Exit loop if there are no results.
+            // Data structure has no nested collection instance
+            if ($this->version == "v2") {
+                // Exit loop, there are is no more data to retrieve.
+                if (empty($collection->first())) {
+                    return $results;
+                }
+
+                // Add the item to the results collection for the v2 api
+                $collection->each(function ($item) use ($results) {
+                    $results->push($item);
+                });
+
+                $currentPage++;
+                continue;
+            }
+            // no results found.Data structure can have a nested collection instance
+            if (empty($collection->first()->first())) {
+                return collect([false]);
+            }
+
+            // Exit loop, there are is no more data to retrieve.
             if ($collection['data']->isEmpty()) {
                 break;
             }
 
-            // Add the item to the results collection
+            // Add the item to the results collection for the v3 api
             $collection['data']->each(function ($item) use ($results) {
                 $results->push($item);
             });
 
             $currentPage++;
-        } while($currentPage < $pageLimit);
+        } while($currentPage <= $pageLimit);
 
         return $results;
     }
