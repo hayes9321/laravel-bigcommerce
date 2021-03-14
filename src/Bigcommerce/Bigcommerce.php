@@ -197,6 +197,13 @@ class Bigcommerce
         return $this->bigcommerce->getheader($header);
     }
 
+    /**
+     * Get the page results for a range of pages.
+     *
+     * @param $uri
+     * @param array $config
+     * @return \Illuminate\Support\Collection
+     */
     public function paginateRequest($uri, $config = [])
     {
         $pageLimit = $config['pages'] ?? 1;
