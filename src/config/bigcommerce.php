@@ -20,9 +20,13 @@ return [
     ],
 
     'oAuth' => [
+        'store-hash' => env("BC_STORE_HASH", null),
         'client_id'     => env("BC_CLIENT_ID", null),
         'client_secret' => env("BC_CLIENT_SECRET", null),
         'redirect_url'  => env("BC_REDIRECT_URL", null)
     ],
 
+    'store-hash' => env("BC_STORE_HASH", null),
+    'client_secret' => env("BC_CLIENT_SECRET", null),
+    'pagination-limit'  => env('BC_PAGINATION_LIMIT',1),
 ];
